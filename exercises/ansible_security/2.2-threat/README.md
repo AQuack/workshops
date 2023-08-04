@@ -11,16 +11,6 @@
 
 In the daily operation of security practitioners a particular need arises: when something suspicious happens and needs further attention, security operations need to deploy many tools to secure an enterprise IT. In many enterprise environments, security solutions are not integrated with each other and, in large organizations, different teams are in charge of different aspects of IT security, with no processes in common. That often leads to manual work and interaction between people of different teams which is error prone and above all, slow.
 
-There are multiple stakeholders involved in preventing security breaches and, if a cyber attack was successful, remediate the security intrusion as quick as possible.
-
-Let's have a brief look at some of the personas involved.
-
-| Persona 	| Tasks 	| Challenges 	|
-|---	|---	|---	|
-| Chief Information Security Officer (CISO) 	| Manage the risk and ensure that security incidents are effectively handled.<br>Create a security ops program. 	| I have multiple teams managing security in silos. Security is not integrated into larger IT practices and landscape. 	|
-| Security Operator 	| Reduce the change delivery time.<br>Enable the escalation of potential threats. 	| I receive an increasing number of requests from Governance, SOC and ITOps that I dont have time to review and execute. 	|
-| Security Analyst 	| Increase the number of events analysed and streamline the coordination of remediation processes. 	| Attacks are becoming more frequent, faster and complex. The tools I use dont live up to expectations. 	|
-
 We will use Ansible Automation Platform to elevate the interactions learned in the last section to combine the security tools into automated workflows.
 
 ## Preparations
@@ -510,6 +500,7 @@ now, launch the `Stop web attack` job template.
 You are done with the exercise. Congratulations!
 
 ----
+
 **Navigation**
 <br><br>
 [Click here to return to the Ansible for Red Hat Enterprise Linux Workshop](../README.md) 
