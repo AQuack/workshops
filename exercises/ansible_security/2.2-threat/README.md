@@ -501,4 +501,4 @@ You are done with the exercise. Congratulations!
 
 ### Navigation
 
-[Click here to return to the Ansible for Red Hat Enterprise Linux Workshop](../README.md) 
+[Click here to return to the Ansible for Security Automation Challenge](../README.md) 
