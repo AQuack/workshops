@@ -1,4 +1,5 @@
 {% include sec_workshop_credentials.md %}
+
 # Black Hat Mini Challenge
 
 <!-- **Read this in other languages**: <br>
@@ -66,7 +67,6 @@ The first thing we run is the `Allow attacker` Job Template. This template creat
       failed_when: false
 ```
 <!-- {% endraw %} -->
-
 
 Next, since this is a security lab, we do need suspicious traffic - an attack. We have a playbook which simulates a simple access every five seconds on which the other components in this exercise will later on react to. In your VS Code online editor, run the playbook `Start web attack` in the console. Here is an example of the underylying YAML:
 
@@ -293,8 +293,6 @@ In Check Point SmartConsole you might even see a little window pop up in the bot
 >
 >If that gets stuck at 10% you can usually safely ignore it, the log exporter works anyway.
 
-
-
 ## Verify the log source configuration
 
 Before that Ansible playbook was invoked, QRadar wasnt receiving any data from Snort or Check Point. Immediately after, without any further intervention by us as security analyst, Check Point logs start to appear in the QRadar log overview.
@@ -501,6 +499,6 @@ You are done with the exercise. Congratulations!
 
 ----
 
-**Navigation**
-<br><br>
+### Navigation
+
 [Click here to return to the Ansible for Red Hat Enterprise Linux Workshop](../README.md) 
