@@ -1,220 +1,515 @@
 {% include sec_workshop_credentials.md %}
-# 2.2 Threat hunting
+# Black Hat Mini Challenge
 
 <!-- **Read this in other languages**: <br>
-[![uk](../../../images/uk.png) English](README.md),  [![japan](../../../images/japan.png) 日本語](README.ja.md), [![france](../../../images/fr.png) Français](README.fr.md).<br> -->
+[![uk](../../../images/uk.png) English](README.md),  [![japan](../../../images/japan.png) �,�](README.ja.md), [![france](../../../images/fr.png) Fran�ais](README.fr.md).<br> -->
 
 - TOC
 {:toc}
 
-## 2.2.1 The Background
+## The Background
 
-Threat detection and response capabilities require from a security operator typically to deploy many tools to secure an enterprise IT. Due to missing processes and a lot of manual work this is a serious challenge to proper IT security operations!
+In the daily operation of security practitioners a particular need arises: when something suspicious happens and needs further attention, security operations need to deploy many tools to secure an enterprise IT. In many enterprise environments, security solutions are not integrated with each other and, in large organizations, different teams are in charge of different aspects of IT security, with no processes in common. That often leads to manual work and interaction between people of different teams which is error prone and above all, slow.
 
-In this exercise, we imagine that we are a security operator in charge of an enterprise firewall in a larger organization. The firewall product used here is Check Point Next Generation Firewall. We will put special focus on interaction between various teams in this exercise - and how those interaction can be streamlined with [automation controller](https://docs.ansible.com/automation.html).
+There are multiple stakeholders involved in preventing security breaches and, if a cyber attack was successful, remediate the security intrusion as quick as possible.
 
-## 2.2.2 Preparations
+Let's have a brief look at some of the personas involved.
 
-As in the previous exercise, we need to make sure a few steps in the previous [Check Point exercises](../1.2-checkpoint/README.md) have been completed:
+| Persona 	| Tasks 	| Challenges 	|
+|---	|---	|---	|
+| Chief Information Security Officer (CISO) 	| Manage the risk and ensure that security incidents are effectively handled.<br>Create a security ops program. 	| I have multiple teams managing security in silos. Security is not integrated into larger IT practices and landscape. 	|
+| Security Operator 	| Reduce the change delivery time.<br>Enable the escalation of potential threats. 	| I receive an increasing number of requests from Governance, SOC and ITOps that I dont have time to review and execute. 	|
+| Security Analyst 	| Increase the number of events analysed and streamline the coordination of remediation processes. 	| Attacks are becoming more frequent, faster and complex. The tools I use dont live up to expectations. 	|
 
-1. The `whitelist_attacker.yml` playbook must have been run at least once.
-2. Also, the logging for the attacker whitelist policy must have been activated in the Check Point SmartConsole.
+We will use Ansible Automation Platform to elevate the interactions learned in the last section to combine the security tools into automated workflows.
 
-Both were done in the [Check Point exercises](../1.2-checkpoint/README.md). If you missed the steps, go back there, execute the playbook, follow the steps to activate the logging and come back here.
+## Preparations
 
-## 2.2.3 Explore the controller setup
+The first thing we run is the `Allow attacker` Job Template. This template creates objects in checkpoint and installs a policy to allow our attacker for the lab. Here's an example of the underlying YAML:
 
-There are two more steps needed for preparation - but in contrast to the previous exercise, we will use automation controller to do them. Your automation controller installation is already populated with users, inventory, credentials and so on, and can be used directly. Let's have a look at it.
+<!-- {% raw %} -->
+```yml
+---
+- name: allowlist attacker
+  hosts: checkpoint
 
-Automation controller is accessed via browser. You need the URL to your personal controller instance. It is be similar to the URL for your VS Code online editor, but without the `-code`. You can also find it on your workshop page:
+  vars:
+    source_ip: "{{ hostvars['attacker']['private_ip2'] }}"
+    destination_ip: "{{ hostvars['snort']['private_ip2'] }}"
+    action_choice: accept
 
-![Controller URL example](images/controller_url.png#centreme)
+  tasks:
+
+    - name: Create source IP host object
+      check_point.mgmt.cp_mgmt_hosts:
+        config:
+          name: "asa-{{ source_ip }}"
+          ipv4_address: "{{ source_ip }}"
+          auto_publish_session: true
+        state: "merged"
+
+    - name: Create destination IP host object
+      check_point.mgmt.cp_mgmt_hosts:
+        config:
+          name: "asa-{{ destination_ip }}"
+          ipv4_address: "{{ destination_ip }}"
+          auto_publish_session: true
+        state: "merged"
+
+    - name: Create access policy
+      check_point.mgmt.cp_mgmt_access_rule:
+        action: "{{ action_choice }}"
+        layer: Network
+        position: top
+        auto_publish_session: true
+        name: "asa-accept-{{ source_ip }}-to-{{ destination_ip }}-redux"
+        source: "asa-{{ source_ip }}"
+        destination: "asa-{{ destination_ip }}"
+        track:
+          type: log
+        state: "present"
+          
+    - name: Install policy
+      check_point.mgmt.cp_mgmt_install_policy:
+        policy_package: standard
+        install_on_all_cluster_members_or_fail: true
+      failed_when: false
+```
+<!-- {% endraw %} -->
+
+
+Next, since this is a security lab, we do need suspicious traffic - an attack. We have a playbook which simulates a simple access every five seconds on which the other components in this exercise will later on react to. In your VS Code online editor, run the playbook `Start web attack` in the console. Here is an example of the underylying YAML:
+
+<!-- {% raw %} -->
+```yml
+---
+- name: start attack
+  hosts: attacker
+  become: yes
+  gather_facts: no
+
+  tasks:
+    - name: simulate attack every 5 seconds
+      shell: "/sbin/daemonize /usr/bin/watch -n 5 curl -m 2 -s http://{{ hostvars['snort']['private_ip2'] }}/web_attack_simulation"
+```
+<!-- {% endraw %} -->
 
 > **Note**
 >
-> This URL and login information are just an example. Your controller URL and login information will be different.
-
-{% include mesh.md %}
-
-Open your browser and enter the link to your automation controller instance. Log-in with your student ID and the password provided to you. You are greeted with a dashboard and a navigation bar on the left side.
-
-![Automation controller dashboard](images/controller_dashboard.png#centreme)
-
-On the left side, click on **Templates**. A list of all already configured job templates are shown. A job template is a definition and set of parameters for running an Ansible job. It defines the inventory, credentials, playbook, limits, become rights and so on which are needed to execute the automation. In this list, find the entry called **Blacklist attacker**, and click on the rocket symbol right to it:
-
-![Blacklist attacker](images/controller_blacklist.png#centreme)
-
-This click will bring you to the job overview, showing live data from the automation job execution and a summary of all the parameters which are relevant to the job. With this automation execution we have changed the existing policy in the Firewall to drop packages between the two machines.
-
-Now all we need is the attack. Unlike the last exercise we will not write and execute a playbook, but again use controller to start the attack. In the navigation bar on the left side, click on **Templates**. In the list of templates, find and execute the one called **Start DDOS attack simulation** by clicking on the rocket icon right to it. This will ensure that every few seconds an attack is simulated.
+> Basically in this playbook we register a small daemon running watch, which will execute a command every 5 seconds. This is a rather harsh way to start a repeating task, but serves the purpose of this lab.
 
 The stage is set now. Read on to learn what this use case is about.
 
-## 2.2.4 See the attack
+## Alerted to the anomaly
 
-You are a security operator in charge of an enterprise firewall in a larger organization. You just found that a policy enforced by a Check Point Next Generation Firewall (NGFW), protecting your line of business applications, has been repeatedly violated. To showcase this, open the SmartConsole on your Windows workstation, access the Check Point management server and on the left side click on the **LOGS & MONITOR** tab. A new window opens, offering you two choices: **Audit Logs** and **Logs**. Click on **Logs** to get to the actual view of the logs:
-
->**Check Point NGFW Credentials**   
->
-> Username: `admin`   
-> Password: `admin123`   
->
-
-![Check Point logs view, violation logs](images/smartconsole_violation_logs.png#centreme)
-
-You can see, a series of messages with the description **http Traffic Dropped** there, repeating again and again over time.
+Imagine you are a security analyst in an enterprise. You were just informed of an anomaly in an application.
 
 > **Note**
 >
-> If you do not see any logs, auto refresh might not be activated. If that is the case, click on the corresponding button, an A next to a circle:
+> You might have guessed already: this log entry is triggered every five seconds by the daemon we started at the beginning of this exercise.
 
-![Check Point logs view, auto refresh button](images/smartconsole_auto_refresh.png#centreme)
+As a security analyst you know that anomalies can be the sign of a breach or other serious causes. You decide to investigate. Right now, you do not have enough information about the anomaly to dismiss it as a false positive. So you need to collect more data points - like from the firewall and the IDS. Going through the logs of the firewall and IDS manually takes a lot of time. In large organizations, the security analyst might not even have the necessary access rights and needs to contact the teams  responsible for both the enterprise firewall and the IDS, asking them to manually go through the respective logs and directly check for anomalies on their own and then reply with the results. This operation could take hours or even days.
 
-Seeing these violations we should start an investigation to assess if they are the outcome of an attack. The best way to investigate is to correlate the firewall logs with logs generated by other security solutions deployed in our network - like Snort - in a log management tool like QRadar.
+## Run a playbooks to create new log sources and forward them to the SIEM
 
-## 2.2.5 Forward logs to QRadar
+If you use a SIEM, things are better: you can collect and analyze logs centrally. In our case the SIEM is QRadar. QRadar has the ability to collect logs from other systems and search them for suspicious activities. So how do we analyze logs in QRadar? Before we can look at these logs we need to stream them into QRadar. This happens in two steps: first we need to configure the sources - here Check Point and Snort - to forward their logs to QRadar. And second we have to add those systems as log sources to QRadar.
 
-However, as mentioned in many enterprise environments security solutions are not integrated with each other and, in large organizations, different teams are in charge of different aspects of IT security, with no processes in common. In our scenario, the typical way for a security operator to escalate the issue and start our investigation would be to contact the security analysis team, manually sending them the firewall logs we used to identify the rule violation - and then wait for the reply. A slow, manual process.
+Doing this manually requires a lot of work on multiple machines, which again takes time and might require privileges a security analyst does not have. But Ansible allows security organizations to create pre-approved automation workflows in the form of playbooks. Those can even be maintained centrally and shared across different teams to enable security workflows at the press of a button. With these Playbooks, we as the security analyst can automatically configure both the enterprise firewall and the IDS to send their events/logs to the QRadar instance, so that we can correlate the data and decide how to proceed with the suspect application.
 
-But, as shown with the last exercise, we can automate this process with Ansible Automation Platform! There can be pre-approved automation workflows in form of playbooks, provided via a central automation tool like automation controller. With such a set of Ansible playbooks, every time we are in a threat hunting situation, we can automatically configure the enterprise firewall to send its events/logs to the QRadar instance that security analysts use to correlate the data and decide how to proceed with the potential threat.
-
-Let's try this out. Log out of your controller instance, and log in as the firewall user: `opsfirewall`. For the simplicity of the demo, the password is the same as for your student user. Once you have logged in and can see the dashboard, navigate to **Templates**. As you see, as the firewall administrator we can only see and execute few job templates:
-
-- **Blacklist attacker**
-- **Send firewall logs to QRadar**
-- **Whitelist attacker**
-
-Since we are the domain owners of the firewall, we can modify, delete and execute those job templates. Let's execute the template **Send firewall logs to QRadar** by clicking on the little rocket icon next to it. The execution of the job takes a few seconds. From the perspective of the firewall operator we have now reconfigured the firewall to send logs to the central SIEM.
-
-However, the SIEM still needs to accept logs and sort them into proper streams, called log sources in QRadar. Let's switch our perspective to the one of the security analyst. We get a call that there is something weird in the firewall and that logs are already sent into our direction. Log out of controller and log back in as the user `analyst`. Again, check out the **Templates**: again we have a different list of automation templates at our hand. We can only see and use those which are relevant to our job. Let's accept the firewall logs into our SIEM: Execute the job template **Accept firewall logs in QRadar**.
-
-After a few seconds the playbook run through, and the new security configuration is done. In contrast to the previous exercise, none of these steps required the operator or the analyst to access the command line, write playbooks or even install roles or collections. The playbooks were pre-approved and in fact accessed from within a Git repository. Automation controller took care of the execution and the downloads of any role or collections. This substantially simplifies automation operations.
-
-If you click on **Jobs** on the right side you will also see that you can always access the previously run jobs. This enables the teams to better track what was executed when, and what where the results. This enables transparency and clear understanding of the automation that was run.
-
->**Note**
+> **Note**
 >
-> A job is an instance of automation controller launching a Job Template. The **Jobs** link displays a list of jobs and their statuses shown as completed successfully or failed, or as an active (running) job.
+> Why don't we add those logs to QRadar permanently? The reason is that many log systems are licensed/paid by the amount of logs they consume, making it expensive pushing non-necessary logs in there. Also, if too many logs are in there it becomes harder to analyse the data properly and in a timely manner.
 
-## 2.2.6 Verify new configuration
+So let's run a few playbooks which first configure the log sources - Snort and Check Point - to send the logs to QRadar, and afterwards adds those log sources to QRadar so that it is aware of them.
 
-Let's quickly verify that the QRadar logs are now showing up. Log into the QRadar web UI. Click on **Log Activity** and verify that events are making it to QRadar from Check Point:
+As usual, the playbook needs a name and the hosts it should be executed on. Since we are working on different machines in this workflow, we will separate the playbook into different "[plays](https://docs.ansible.com/ansible/latest/user_guide/playbooks_intro.html#playbook-language-example)":
 
->**IBM QRadar Credentials**   
+> **Note**
 >
-> Username: `admin`   
-> Password: `Ansible1!`   
+> The goal of a play is to map a group of hosts to some well defined roles, represented by things ansible calls tasks. At a basic level, a task is nothing more than a call to an ansible module.
+
+This means that the "host" section will appear multiple times in one playbook, and each section has a dedicated task list.
+
+Let's start with the Snort configuration. We need Snort's log server to send the logs to the QRadar server. This can be configured with an already existing role, [ids_config](https://github.com/ansible-security/ids_config), so all we have to do is to import the role and use it with the right parameters.
+
+So let's review the `Send IDPS logs to Qradar` template where we use the role. Here's an example of the underlying YAML
+<!-- {% raw %} -->
+```yaml
+---
+- name: Configure snort for external logging
+  hosts: snort
+  become: true
+  vars:
+    ids_provider: "snort"
+    ids_config_provider: "snort"
+    ids_config_remote_log: true
+    ids_config_remote_log_destination: "{{ hostvars['qradar']['private_ip'] }}"
+    ids_config_remote_log_procotol: udp
+    ids_install_normalize_logs: false
+
+  tasks:
+    - name: import ids_config role
+      include_role:
+        name: "ansible_security.ids_config"
+```
+<!-- {% endraw %} -->
+
+As you see, we are re-using the role and let it do the work. We only change the behavior of the role via the parameters: we provide the QRadar IP via variable, set the IDS provider to `snort` and define the protocol in which packages are sent as `UDP`
+
+Now we have to tell QRadar that there is this new Snort log source. Run the `Accept IDPS logs in QRadar` template. Here's an example of the underlying code:
+
+<!-- {% raw %} -->
+```yaml
+- name: Add Snort log source to QRadar
+  hosts: qradar
+  collections:
+    - ibm.qradar
+
+  tasks:
+    - name: Add snort remote logging to QRadar
+      qradar_log_source_management:
+        name: "Snort rsyslog source - {{ hostvars['snort']['private_ip'] }}"
+        type_name: "Snort Open Source IDS"
+        state: present
+        description: "Snort rsyslog source"
+        identifier: "{{ hostvars['snort']['ansible_fqdn'] }}"
+```
+<!-- {% endraw %} -->
+
+Now we have to do the same for Check Point: we need to configure Check Point to forward its logs to QRadar. This can be configured with an already existing role, [log_manager](https://github.com/ansible-security/log_manager).
+
+Now let's run `Send firewall logs to QRadar` template to configure checkpoint to send logs to Qradar. Here's an example of the underlying YAML:
+
+<!-- {% raw %} -->
+```yaml
+- name: Configure Check Point to send logs to QRadar
+  hosts: checkpoint
+
+  tasks:
+    - include_role:
+        name: ansible_security.log_manager
+        tasks_from: forward_logs_to_syslog
+      vars:
+        syslog_server: "{{ hostvars['qradar']['private_ip'] }}"
+        checkpoint_server_name: "YOURSERVERNAME"
+        firewall_provider: checkpoint
+```
+<!-- {% endraw %} -->
+
+> **Note**
 >
+Now we have to tell QRadar that there is another log source, this time Check Point. We do this by running the `Accept firewall logs in Qradar` template. Here's an example of the underlying YAML:
+
+<!-- {% raw %} -->
+```yaml
+- name: Add Check Point log source to QRadar
+  hosts: qradar
+  collections:
+    - ibm.qradar
+
+  tasks:
+    - name: Add Check Point remote logging to QRadar
+      qradar_log_source_management:
+        name: "Check Point source - {{ hostvars['checkpoint']['private_ip'] }}"
+        type_name: "Check Point FireWall-1"
+        state: present
+        description: "Check Point log source"
+        identifier: "{{ hostvars['checkpoint']['private_ip'] }}"
+
+    - name: deploy the new log source
+      qradar_deploy:
+        type: INCREMENTAL
+      failed_when: false
+```
+<!-- {% endraw %} -->
+
+Note that compared to the last QRadar play, this time an additional task is added: `deploy the new log source`. This is due to the fact that QRadar changes are spooled, and only applied upon an extra request. We ignore errors because they might happen due to timeouts in the REST API which do not inflict the actual function of the API call.
+
+If you bring all these pieces together, the full playbook YAML is:
+
+<!-- {% raw %} -->
+```yaml
+---
+- name: Configure snort for external logging
+  hosts: snort
+  become: true
+  vars:
+    ids_provider: "snort"
+    ids_config_provider: "snort"
+    ids_config_remote_log: true
+    ids_config_remote_log_destination: "{{ hostvars['qradar']['private_ip'] }}"
+    ids_config_remote_log_procotol: udp
+    ids_install_normalize_logs: false
+
+  tasks:
+    - name: import ids_config role
+      include_role:
+        name: "ansible_security.ids_config"
+
+- name: Add Snort log source to QRadar
+  hosts: qradar
+  collections:
+    - ibm.qradar
+
+  tasks:
+    - name: Add snort remote logging to QRadar
+      qradar_log_source_management:
+        name: "Snort rsyslog source - {{ hostvars['snort']['private_ip'] }}"
+        type_name: "Snort Open Source IDS"
+        state: present
+        description: "Snort rsyslog source"
+        identifier: "{{ hostvars['snort']['ansible_fqdn'] }}"
+
+- name: Configure Check Point to send logs to QRadar
+  hosts: checkpoint
+
+  tasks:
+    - include_role:
+        name: ansible_security.log_manager
+        tasks_from: forward_logs_to_syslog
+      vars:
+        syslog_server: "{{ hostvars['qradar']['private_ip'] }}"
+        checkpoint_server_name: "YOURSERVERNAME"
+        firewall_provider: checkpoint
+
+- name: Add Check Point log source to QRadar
+  hosts: qradar
+  collections:
+    - ibm.qradar
+
+  tasks:
+    - name: Add Check Point remote logging to QRadar
+      qradar_log_source_management:
+        name: "Check Point source - {{ hostvars['checkpoint']['private_ip'] }}"
+        type_name: "Check Point FireWall-1"
+        state: present
+        description: "Check Point log source"
+        identifier: "{{ hostvars['checkpoint']['private_ip'] }}"
+
+    - name: deploy the new log sources
+      qradar_deploy:
+        type: INCREMENTAL
+      failed_when: false
+```
+<!-- {% endraw %} -->
+
+> **Note**
+>
+In Check Point SmartConsole you might even see a little window pop up in the bottom left corner informing you about the progress.
+
+![Check Point progress](images/2.1-checkpoint-progress.png#centreme)
+
+>Note
+>
+>If that gets stuck at 10% you can usually safely ignore it, the log exporter works anyway.
+
+
+
+## Verify the log source configuration
+
+Before that Ansible playbook was invoked, QRadar wasnt receiving any data from Snort or Check Point. Immediately after, without any further intervention by us as security analyst, Check Point logs start to appear in the QRadar log overview.
+
+Log onto the QRadar web UI. Click on **Log Activity**. As you will see, there are a lot of logs coming in all the time:
+
+> **IBM QRadar Credentials**
+>
+> Username: `admin`
+> Password: `Ansible1!`
 
 > **Note**
 >
 > It is recommended to use Mozilla Firefox with the QRadar web UI.  For more information on this limitation please reference [workshop issue 1536](https://github.com/ansible/workshops/issues/1536)
 
-![QRadar Log Activity showing logs from Check Point](images/qradar_checkpoint_logs.png#centreme)
+![QRadar Log Activity showing logs from Snort and Check Point](images/qradar_log_activity.png#centreme)
+
+Many of those logs are in fact internal QRadar logs. To get a better overview, click on the drop down menu next to **Display** in the middle above the log list. Change the entry to **Raw Events**.
+
+Next, in the menu bar above that, click onto the button with the green funnel symbol and the text **Add Filter**. As **Parameter**, pick **Log Source [Indexed]**, as **Operator**, pick **Equals any of**. Then, from the list of log sources, pick **Check Point source** and click onto the small plus button on the right. Do the same for **Snort rsyslog source**, and press the button **Add Filter**:
+
+![QRadar Log Activity showing logs from Snort and Check Point](images/qradar_filter_logs.png#centreme)
+
+>**Note**
+>
+> We will only see Check Point logs at this point. Snort logs will only appear later in QRadar once we've completed a few later steps in this exercise.
+
+Now the list of logs is better to analyze. Verify that events are making it to QRadar from Check Point. Sometimes QRadar needs a few seconds to fully apply the new log sources. Until the new log sources are fully configured, incoming logs will have a "default" log source for unknown logs, called **SIM GENERIC LOG DSM-7**. If you see logs from this default log source, wait a minute or two. After that waiting time, the new log source configuration is properly applied and QRadar will attribute the logs to the right log source, here Check Point.
+
+Also, if you change the **View** from **Real Time** to for example **Last 5 Minutes** you can even click on individual events to see more details of the data the firewall sends you.
+
+Let's verify that QRadar also properly shows the log source. In the QRadar UI, click on the "hamburger button" (three horizontal bars) in the left upper corner and then click on **Admin** at the bottom.
+
+![QRadar hamburger](images/2-qradar-hamburger.png#centreme)
+
+In there, click on **Log Sources**.
+
+![QRadar log sources](images/2-qradar-log-sources.png#centreme)
+
+A new window opens and shows the new log sources.
+
+![QRadar Log Sources](images/2-qradar-log-sources-window.png#centreme)
+
+Note that so far no logs are sent from Snort to QRadar: Snort does not know yet that this traffic is noteworthy!
+
+But as a security analyst, with more data at our disposal, we finally have a better idea of what could be the cause of the anomaly in the application behavior. We see the logs from the firewall, see who is sending traffic to who, but there's still not enough data to dismiss the event as a false positive.
+
+## Add Snort signature
+
+To decide if this anomaly is a false positive, as a security analyst you need to exclude any potential attack. Given the data at your disposal you decide to implement a new signature on the IDS to get alert logs if such traffic is detected again.
+
+In a typical situation, implementing a new rule would require another interaction with the security operators in charge of Snort. But luckily we can again use an Ansible Playbook to achieve the same goal in seconds rather than hours or days.
+
+In our controller, we will run `Add IDPS rule`
+
+<!-- {% raw %} -->
+```yaml
+---
+- name: Add IDPS rule
+  hosts: snort
+  become: yes
+
+  vars:
+    ids_provider: snort
+    protocol: tcp
+    source_port: any
+    source_ip: any
+    dest_port: any
+    dest_ip: any
+
+  tasks:
+    - name: Add snort web attack rule
+      include_role:
+        name: "ansible_security.ids_rule"
+      vars:
+        ids_rule: 'alert {{protocol}} {{source_ip}} {{source_port}} -> {{dest_ip}} {{dest_port}}  (msg:"Attempted Web Attack"; uricontent:"/web_attack_simulation"; classtype:web-application-attack; sid:99000020; priority:1; rev:1;)'
+        ids_rules_file: '/etc/snort/rules/local.rules'
+        ids_rule_state: present
+```
+<!-- {% endraw %} -->
+
+In this play we provide some variables for Snort stating that we want to control any traffic on tcp. Afterwards, with the help of the `ids_rule` role we set a new rule containing the `web_attack_simulation` string as content, making it possible to identify future occurrences of this behavior.
+
+Now run the job template
+
+## Identify and close the Offense
+
+Moments after the playbook has been executed, we can check in QRadar if we see Offenses. And indeed, that is the case. Log into your QRadar UI, click on **Offenses**, and there on the left side on **All Offenses**:
+
+![QRadar Offenses](images/qradar_offenses.png#centreme)
+
+With these information at our hand, we can now finally check all offenses of this type, and verify that they are all coming only from one single host, the attacker.
+
+The next step would be to get in touch with the team responsible for that machine, and discuss the behavior. For the purpose of the demo we assume that the team of that machine provides feedback that this behavior is indeed wanted, and that the security alert is a false positive. Thus we can dismiss the QRadar offense.
+
+In the Offense view, click on the Offense, then in the menu on top on **Actions**, In the drop-down menu-click on **close**. A window will pop up where you can enter additional information and finally close the offense as a false positive.
+
+## Rollback
+
+In the final step, we will rollback all configuration changes to their pre-investigation state, reducing resource consumption and the analysis workload for us and our fellow security analysts. Also we need to stop the attack simulation.
+
+We run a new playbook, `Roll back all changes`. The major differences are that for QRadar we set the state of the log sources to `absent`, for Snort we set `ids_config_remote_log` to `false`, and for Check Point we initiate the tasks for `unforward_logs_to_syslog`.
+
+Here's an example of the underlying YAML:
+
+<!-- {% raw %} -->
+```yaml
+---
+- name: Disable external logging in Snort
+  hosts: snort
+  become: true
+  vars:
+    ids_provider: "snort"
+    ids_config_provider: "snort"
+    ids_config_remote_log: false
+    ids_config_remote_log_destination: "{{ hostvars['qradar']['private_ip'] }}"
+    ids_config_remote_log_procotol: udp
+    ids_install_normalize_logs: false
+
+  tasks:
+    - name: import ids_config role
+      include_role:
+        name: "ansible_security.ids_config"
+
+- name: Remove Snort log source from QRadar
+  hosts: qradar
+  collections:
+    - ibm.qradar
+
+  tasks:
+    - name: Remove snort remote logging from QRadar
+      qradar_log_source_management:
+        name: "Snort rsyslog source - {{ hostvars['snort']['private_ip'] }}"
+        type_name: "Snort Open Source IDS"
+        state: absent
+        description: "Snort rsyslog source"
+        identifier: "{{ hostvars['snort']['ansible_fqdn'] }}"
+
+- name: Configure Check Point to not send logs to QRadar
+  hosts: checkpoint
+
+  tasks:
+    - include_role:
+        name: ansible_security.log_manager
+        tasks_from: unforward_logs_to_syslog
+      vars:
+        syslog_server: "{{ hostvars['qradar']['private_ip'] }}"
+        checkpoint_server_name: "YOURSERVERNAME"
+        firewall_provider: checkpoint
+
+- name: Remove Check Point log source from QRadar
+  hosts: qradar
+  collections:
+    - ibm.qradar
+
+  tasks:
+    - name: Remove Check Point remote logging from QRadar
+      qradar_log_source_management:
+        name: "Check Point source - {{ hostvars['checkpoint']['private_ip'] }}"
+        type_name: "Check Point NGFW"
+        state: absent
+        description: "Check Point log source"
+        identifier: "{{ hostvars['checkpoint']['private_ip'] }}"
+
+    - name: deploy the log source changes
+      qradar_deploy:
+        type: INCREMENTAL
+      failed_when: false
+```
+<!-- {% endraw %} -->
 
 > **Note**
 >
-> If you do not see any logs coming in, click on the drop down menu next to **View** and select **Real Time (streaming)**.
+While this playbook is maybe the longest you see in these entire exercises, the structure and content should already be familiar to you. Take a second to go through each task to understand what is happening.
 
-If the logs get drowned in QRadar's own logs, create a filter. Or click on unwanted log lines in the column **Log Source**, and pick **Filter on Log Source is not ...** to create filters on the fly to filter out unwanted traffic.
-
-Let's verify that QRadar also properly shows the log source. In the QRadar UI, click on the hamburger button in the left upper corner, and click on **Admin**. In there, click on **Log Sources**. A new window opens and shows the new log source.
-
-![QRadar Log Sources](images/qradar_log_sources.png#centreme)
-
-## 2.2.7 Offenses
-
-Next we want to manage offenses shown in QRadar. Currently non are generated - but are some already pre-configured for this use case? In the QRadar web UI, open the **Offenses** tab. On the left side menu, click on **Rules**. Above, Within the **Group:** drop down click select **Ansible**. All pre-configured offense rules for this workshop are shown:
-
-![QRadar Pre-configured Rules](images/qradar_preconfigured_rules.png#centreme)
-
-Double-click on the rule called **Ansible Workshop DDOS Rule**. The rule wizard window opens, allowing us changes to the offense rule if needed:
-
-![QRadar Rules Wizard](images/qradar_rule_wizard.png#centreme)
-
-From the wizard you can see that we only use very few checks (second box in the window). Rules can be much more complex, can even depend on other rules and as a result do not have to create offenses, but for example can create additional log entries. We will not do any changes here, so leave the wizard with a click on **Cancel** in the bottom right corner and confirm the close-warning of your browser.
-
-To decide if this violation is a false positive, we need to make sure that other sources are not performing an attack which we might not see in the firewall. To do that we need to access the logs generated by the IDS and decide to check for a specific attack pattern that could be compatible with the violation on the firewall.
-
-## 2.2.8 Add Snort rule
-
-Let's add a new IDS rule. Again we will do this via a pre-approved playbook already in controller. Log out of controller, and log in as user `opsids` - the IDPS operator in charge of the IDPS. Navigate to **Templates**. There is a pre-created job template called **Add IDPS Rule** available to add a rule to Snort. Execute it by clicking on the small rocket icon. But as you see, instead of bringing you to the jobs output, you will be faced with a survey:
-
-![Automation controller survey](images/controller_snort_survey.png#centreme)
-
-The playbook cannot run without further content - we have to provide the actual rule which needs to be deployed! Of course, with Snort, the rule necessary to be added depends on the actual use case and thus might be different each time. Thus this job template has a ***survey*** enabled, a method in automation controller to query input before execution.
-
-In this case we query the proper signature, the right Snort rule for this specific attack. Enter the following string into the field:
-
-```
-alert tcp any any -> any any (msg:"Attempted DDoS Attack"; uricontent:"/ddos_simulation"; classtype:successful-dos; sid:99000010; priority:1; rev:1;)
-```
-
-As you can see we add a new snort rule matching on the parameters of the attack. In our example we again check for URI content. After you added the string, click on **Next** and then on **Launch**.
-
-The playbook runs through, takes care of installing the new rule, restarting the service and so on.
-
-Quickly verify the new rule on the Snort instance. From a terminal of your VS Code online editor, log in to Snort via SSH with the user `ec2-user`:
-
-```bash
-[student@ansible-1 ~]$ ssh ec2-user@snort
-Last login: Fri Sep 20 15:09:40 2019 from 54.85.79.232
-[ec2-user@snort ~]$ sudo grep ddos_simulation /etc/snort/rules/local.rules
-alert tcp any any -> any any  (msg:"Attempted DDoS Attack"; uricontent:"/ddos_simulation"; classtype:successful-dos; sid:99000010; priority:1; rev:1;)
-```
-
-> **Note**
+>**Note**
 >
-> Also, verify that the snort service is running via `sudo systemctl status snort`. If there is a fatal error, chances are the rule you entered had an error. Remove the rules line from the file `/etc/snort/rules/local.rules` and run the playbook again.
+> Please ensure that you have exited out of any current ssh sessions and have your **control-node** prompt open before running the `Rollback all changes` template.
 
-After you have verified the rule, leave the Snort server via the command `exit`.
+Run the job template to remove the log sources
 
-Next we also want the IDPS to send logs to QRadar in case the rule has a hit. We could just execute a corresponding job template as the user `opsids`. But this time we want to take a different path: instead of the IDPS operator executing the prepared playbook, we want to show how automation controller can delegate such execution rights to others without letting them take control of the domain.
+Also, we'll need to stop the process which simulates the web attack. Let's run a simple playbook that uses the `shell` module to stop the process running on the **attacker** machine.
 
-Imagine that the analysts team and the IDPS operator team have agreed upon a pre-defined playbook to forward logs from the IDPS to QRadar. Since the IDPS team was involved in creating this playbook and agreed to it, they provide it to the analyst team to execute it whenever they need it, without any further involvement.
+We are using the `shell` module because it allows us to use [piping](https://www.redhat.com/sysadmin/pipes-command-line-linux). Shell piping let's us chain multiple commands together which we need to stop the process.
 
-Log out of controller, and log back in as user `analyst`. In the **Templates** section there are multiple playbooks:
+Let's review a new playbook called `Stop web attack sim
+<!-- {% raw %} -->
+```yaml
+---
+- name: stop attack simulation
+  hosts: attacker
+  become: yes
+  gather_facts: no
 
-- **Accept firewall logs in QRadar**
-- **Accept IDPS logs in QRadar**
-- **Roll back all changes**
-- **Send IDPS logs to QRadar**
+  tasks:
+    - name: stop attack process
+      shell: >
+        sleep 2;ps -ef | grep -v grep | grep -w /usr/bin/watch | awk '{print $2}'|xargs kill &>/dev/null; sleep 2
+```
+<!-- {% endraw %} -->
+now, launch the `Stop web attack` job template.
 
-Only the two **Accept...** job templates belong the analyst, and can be modified or for example deleted as indicated by the little garbage can icon. The job template **Send IDPS logs to QRadar** is provided by the IDPS team solely for execution rights, and thus cannot be modified or removed - only executed. That way the right to execute automation is provided across team boundaries - while the right to modify or change it stays with the team which has the domain knowledge, here the IDPS team. Also note the credentials: accessing the IDPS requires SSH keys. They are referenced in the job template, but the user analyst cannot look up their content in the **Credentials** section of controller. This way a separation of right to execute the automation from the right to access the target machine is ensured.
-
-Execute now both job templates **Accept IDPS logs in QRadar** and **Send IDPS logs to QRadar** by pressing the little rocket icon next to the job templates.
-
-## 2.2.9 Whitelist IP
-
-Let's quickly have a look at our SIEM QRadar: access the log activity tab. Validate, that in QRadar **no** events from the IDS are generated. That way you know for sure that the anomaly you see is only caused by the single IP you have in the firewall. No other traffic is causing the anomaly, you can safely assume that the anomaly you see is a false positive.
-
-> **Note**
->
-> In reality you might perform additional steps analyzing the machines behavior to exclude the possibility that it has been compromised.
-
-We have determined that the host is not performing an attack and finally confirmed that the firewall policy violation is a false positive, probably caused by a misconfiguration of the whitelist group for that application. So we can whitelist the IP in the firewall to let events come through.
-
-Log out of controller and log back in as user `opsfirewall`. Go to the **Templates** overview, and launch the job template **Whitelist attacker**. A few moments later the traffic is allowed.
-
-Let's verify that QRadar properly shows the Snort log events. In the QRadar UI, click on the **Log Activity** menu at the top. You should see log entries from the **Snort rsyslog source** similar to the below.
-
-![QRadar Snort logs](images/qradar_snort_logs.png#centreme)
-
-
-## 2.2.10 Rollback
-
-The analysts have ended their threat hunting. To reduce resource consumption and the analysis workload it is preferable to now rollback the Check Point and Snort log configurations back to their pre-investigation state. To do so, there is pre-approved job template available to the analysts called **Roll back all changes**.
-
-Log into automation controller as the user `analyst`, and execute the **Roll back all changes** job template by clicking on the little rocket icon next to it. Soon all logging configuration is set back to normal.
-
-Last but not least we have to stop the attack simulation. Log out of controller, and log back in as your student (admin) user. In the section **Templates**, find and execute the job template called **Stop DDOS attack simulation**.
-
-You are done with the exercise. Turn back to the list of exercises to continue with the next one.
+You are done with the exercise. Congratulations!
 
 ----
-
 **Navigation**
 <br><br>
-[Previous Exercise](../2.1-enrich/README.md) | [Next Exercise](../2.3-incident/README.md)
-<br><br>
-[Click here to return to the Ansible for Red Hat Enterprise Linux Workshop](../README.md)
+[Click here to return to the Ansible for Red Hat Enterprise Linux Workshop](../README.md) 

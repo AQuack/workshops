@@ -165,6 +165,13 @@
   pause:
     minutes: 1
 
+# Add execution environment
+- name: Add rfshsec EE to the controller instance
+  execution_environment:
+    name: "BH EE"
+    image: registry.gitlab.com/redhatautomation/rfshsec
+
+
 # Job templates
 - name: Job template sending firewall logs to QRadar
   awx.awx.job_template:
@@ -248,13 +255,13 @@
     use_fact_cache: true
     validate_certs: false
 
-- name: Job template adding DDOS IDPS rule
+- name: Job template adding web attack IDPS rule
   awx.awx.job_template:
     name: "Add IDPS rule"
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
-    playbook: "snort_rule.yml"
+    playbook: "web_snort_rule.yml"
     state: "present"
     limit: "snort"
     credential: "Workshop Credential"
@@ -268,13 +275,13 @@
     use_fact_cache: true
     validate_certs: false
 
-- name: Job template adding ddos attack simulation
+- name: Job template adding start web attack simulation
   awx.awx.job_template:
-    name: "Start DDOS attack simulation"
+    name: "Start web attack simulation"
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
-    playbook: "ddos_attack_simulation.yml"
+    playbook: "start_web_attack_sim.yml"
     state: "present"
     limit: "attacker"
     credential: "Workshop Credential"
@@ -286,13 +293,13 @@
     use_fact_cache: true
     validate_certs: false
 
-- name: Job template stopping ddos attack simulation
+- name: Job template adding stop web attack simulation
   awx.awx.job_template:
-    name: "Stop DDOS attack simulation"
+    name: "Stop web attack simulation"
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
-    playbook: "ddos_stop_simulation.yml"
+    playbook: "stop_web_attack_sim.yml"
     state: "present"
     limit: "attacker"
     credential: "Workshop Credential"
@@ -304,32 +311,50 @@
     use_fact_cache: true
     validate_certs: false
 
-- name: Job template adding whitelist entry for attacker
+- name: Job template adding allow entry for attacker
   awx.awx.job_template:
-    name: "Whitelist attacker"
+    name: "Allow attacker"
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
-    playbook: "whitelist_attacker.yml"
+    playbook: "allowdeny_attacker.yml"
     state: "present"
     limit: "checkpoint"
-    execution_environment: "{{ workshop_type }} workshop execution environment"
+    execution_environment: "BH EE"
+    controller_username: admin
+    controller_password: "{{ admin_password }}"
+    controller_host: "https://{{ ansible_host }}"
+    use_fact_cache: true
+    validate_certs: false
+  
+- name: Job template adding deny entry for attacker
+  awx.awx.job_template:
+    name: "Deny attacker"
+    job_type: "run"
+    inventory: "Workshop Inventory"
+    project: "Workshop Project"
+    playbook: "allowdeny_attacker.yml"
+    state: "present"
+    limit: "checkpoint"
+    extra_vars: "action_choice: deny"
+    execution_environment: "BH EE"
     controller_username: admin
     controller_password: "{{ admin_password }}"
     controller_host: "https://{{ ansible_host }}"
     use_fact_cache: true
     validate_certs: false
 
-- name: Job template adding blacklist entry for attacker
+  
+- name: Job template adding rollback for checkpoint
   awx.awx.job_template:
-    name: "Blacklist attacker"
+    name: "Rollback Checkpoint"
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
-    playbook: "blacklist_attacker.yml"
+    playbook: "rollback_cp.yml"
     state: "present"
     limit: "checkpoint"
-    execution_environment: "{{ workshop_type }} workshop execution environment"
+    execution_environment: "BH EE"
     controller_username: admin
     controller_password: "{{ admin_password }}"
     controller_host: "https://{{ ansible_host }}"
@@ -349,8 +374,8 @@
     validate_certs: false
   loop:
     - "Send firewall logs to QRadar"
-    - "Whitelist attacker"
-    - "Blacklist attacker"
+    - "Allow attacker"
+    - "Deny attacker"
 
 - name: Ensure that opsfirewall has admin rights for own jobs
   awx.awx.role:

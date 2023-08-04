@@ -13,9 +13,7 @@ The time required to do the workshops strongly depends on multiple factors: the 
 
 Given students with basic experience with Ansible:
 
-- the introduction takes roughly 30 minutes
-- the first exercise takes roughly one hour
-- the second exercise takes roughly two hours
+- the challenge takes roughly 15 minutes
 
 If your experience is different in scheduling those workshops, please let us know and fill an issue.
 
@@ -23,18 +21,9 @@ If your experience is different in scheduling those workshops, please let us kno
 
 ![ansible security lab diagram](../../images/ansible_security_diagram.png#centreme)
 
-## Section 1 - Introduction to Ansible Security Automation Basics
+## Ansible Security Automation Challenge
 
- - [Exercise 1.1 - Exploring the lab environment](1.1-explore)
- - [Exercise 1.2 - Executing the first Check Point playbook](1.2-checkpoint)
- - [Exercise 1.3 - Executing the first Snort playbook](1.3-snort)
- - [Exercise 1.4 - Executing the first IBM QRadar playbook](1.4-qradar)
-
-## Section 2 - Ansible Security Automation Use Cases
-
- - [Exercise 2.1 - Investigation Enrichment](2.1-enrich)
- - [Exercise 2.2 - Threat hunting](2.2-threat)
- - [Exercise 2.3 - Incident response](2.3-incident)
+ - [Click here to get started](2.2-threat)
 
 ---
 ![Red Hat Ansible Automation](../../images/rh-ansible-automation-platform.png)
