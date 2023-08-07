@@ -297,7 +297,7 @@ In Check Point SmartConsole you might even see a little window pop up in the bot
 
 ## Verify the log source configuration
 
-Before that Ansible playbook was invoked, QRadar wasnt receiving any data from Snort or Check Point. Immediately after, without any further intervention by us as security analyst, Check Point logs start to appear in the QRadar log overview.
+Before that Ansible playbook was invoked, QRadar wasn't receiving any data from Snort or Check Point. Immediately after, without any further intervention by us as security analyst, Check Point logs start to appear in the QRadar log overview.
 
 Log onto the QRadar web UI. Click on **Log Activity**. As you will see, there are a lot of logs coming in all the time:
 
@@ -305,7 +305,6 @@ Log onto the QRadar web UI. Click on **Log Activity**. As you will see, there ar
 >
 > Username: `admin`
 > Password: `Ansible1!`
-
 > **Note**
 >
 > It is recommended to use Mozilla Firefox with the QRadar web UI.  For more information on this limitation please reference [workshop issue 1536](https://github.com/ansible/workshops/issues/1536)
