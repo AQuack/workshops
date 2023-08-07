@@ -188,7 +188,7 @@ Now let's run `Send firewall logs to QRadar` template to configure checkpoint to
 
 > **Note**
 >
-Now we have to tell QRadar that there is another log source, this time Check Point. We do this by running the `Accept firewall logs in Qradar` template. Here's an example of the underlying YAML:
+>Now we have to tell QRadar that there is another log source, this time Check Point. We do this by running the `Accept firewall logs in Qradar` template. Here's an example of the underlying YAML:
 
 <!-- {% raw %} -->
 ```yaml
@@ -213,7 +213,9 @@ Now we have to tell QRadar that there is another log source, this time Check Poi
 ```
 <!-- {% endraw %} -->
 
-Note that compared to the last QRadar play, this time an additional task is added: `deploy the new log source`. This is due to the fact that QRadar changes are spooled, and only applied upon an extra request. We ignore errors because they might happen due to timeouts in the REST API which do not inflict the actual function of the API call.
+>**Note**
+>
+>Notice that compared to the last QRadar play, this time an additional task is added: `deploy the new log source`. This is due to the fact that QRadar changes are spooled, and only applied upon an extra request. We ignore errors because they might happen due to timeouts in the REST API which do not inflict the actual function of the API call.
 
 If you bring all these pieces together, the full playbook YAML is:
 
