@@ -145,13 +145,16 @@
     controller_host: "https://{{ ansible_host }}"
     validate_certs: false
 
-# Add repository as project
+# Add repository(ies) as project(s)
+# Can either update this project to a different scm_url:, change the scm_branch:
+# or leave include the second project
 - name: Add git repository as Tower project
   awx.awx.project:
     name: "Workshop Project"
     organization: "Default"
     scm_type: git
     scm_url: "https://github.com/ansible-security/workshop-examples"
+#    scm_branch: devel
     controller_username: admin
     controller_password: "{{ admin_password }}"
     controller_host: "https://{{ ansible_host }}"
@@ -161,16 +164,36 @@
   retries: 5
   delay: 10
 
+# - name: Add git repository as Controller project
+#   awx.awx.project:
+#     name: "BH Mini Project"
+#     organization: "Default"
+#     scm_type: git
+#     scm_url: "https://gitlab.com/redhatautomation/rfshsec.git"
+#     controller_username: admin
+#     controller_password: "{{ admin_password }}"
+#     controller_host: "https://{{ ansible_host }}"
+#     validate_certs: false
+#   register: add_repo
+#   until: add_repo is not failed
+#   retries: 5
+#   delay: 10
+
+
 - name: Wait for update to finish
   pause:
     minutes: 1
 
 # Add execution environment
-- name: Add rfshsec EE to the controller instance
-  execution_environment:
+# This could be updated in the future to remove this requirement
+- name: Add git repository as Controller project
+  awx.awx.execution_environment:
     name: "BH EE"
-    image: registry.gitlab.com/redhatautomation/rfshsec
-
+    image: "registry.gitlab.com/redhatautomation/rfshsec:latest"
+    controller_username: admin
+    controller_password: "{{ admin_password }}"
+    controller_host: "https://{{ ansible_host }}"
+    validate_certs: false
 
 # Job templates
 - name: Job template sending firewall logs to QRadar
@@ -179,6 +202,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "cp_log.yml"
     state: "present"
     limit: "checkpoint"
@@ -195,6 +219,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"    
     playbook: "idps_log.yml"
     state: "present"
     limit: "snort"
@@ -213,6 +238,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "qradar_cp_log.yml"
     state: "present"
     limit: "qradar"
@@ -229,6 +255,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "qradar_snort_log.yml"
     state: "present"
     limit: "qradar"
@@ -245,6 +272,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "rollback.yml"
     state: "present"
     credential: "Workshop Credential"
@@ -261,6 +289,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "web_snort_rule.yml"
     state: "present"
     limit: "snort"
@@ -281,6 +310,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "start_web_attack_sim.yml"
     state: "present"
     limit: "attacker"
@@ -299,6 +329,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "stop_web_attack_sim.yml"
     state: "present"
     limit: "attacker"
@@ -317,6 +348,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "allowdeny_attacker.yml"
     state: "present"
     limit: "checkpoint"
@@ -333,6 +365,7 @@
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "allowdeny_attacker.yml"
     state: "present"
     limit: "checkpoint"
@@ -344,13 +377,13 @@
     use_fact_cache: true
     validate_certs: false
 
-  
 - name: Job template adding rollback for checkpoint
   awx.awx.job_template:
     name: "Rollback Checkpoint"
     job_type: "run"
     inventory: "Workshop Inventory"
     project: "Workshop Project"
+#    project: "BH Mini Project"
     playbook: "rollback_cp.yml"
     state: "present"
     limit: "checkpoint"
@@ -418,3 +451,4 @@
   loop:
     - "Roll back all changes"
     - "Send IDPS logs to QRadar"
+    
